@@ -14,6 +14,7 @@ public class Server {
     private static final String SEPARATOR = "#";
     private static String[] locations = new String[2];
     private static int[] timestamps = new int[2];
+    private static String[] macs = new String[2];
     private static PrintWriter[] writers = new PrintWriter[2];
 
     public static void main(String[] args) {
@@ -51,25 +52,29 @@ public class Server {
                 in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 out = new PrintWriter(socket.getOutputStream(), true);
                 
-                id = 0;
-                idPartner = 1;
-                if(writers[0]==null) writers[0] = out;
-                else if(writers[1]==null) {
-                	id = 1;
-                	idPartner = 0;
-                	writers[1] = out;
-                }
-                else out.write("REFUSED"); //TODO 
-                
-                setFields(in.readLine());
-                writeFields();
-
-                while(true) {
-                	setFields(in.readLine());
-                	writeFields();
+                String line = in.readLine();
+                if(line!=null) {
+	                String mac = line.split(SEPARATOR)[2];
+	                
+	                id = 0;
+	                idPartner = 1;
+	                if(writers[0]==null || macs[0].equals(mac)) {
+	                	writers[0] = out;
+	                	macs[0] = mac;
+	                }
+	                else if(writers[1]==null || macs[1].equals(mac)) {
+	                	id = 1;
+	                	idPartner = 0;
+	                	writers[1] = out;
+	                	macs[1] = mac;
+	                }
+	                else out.write("REFUSED"); //TODO 
+	                
+	                setFields(line);
+	                writeFields();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                return;
             } finally {
             	writers[id] = null;
                 locations[id] = null;
@@ -83,8 +88,10 @@ public class Server {
         }
         
         private void writeFields() {
-        	if(writers[idPartner]!=null) writers[id].println(locations[idPartner] + SEPARATOR + timestamps[idPartner]);
-        	else writers[id].println("Unkown" + SEPARATOR + Integer.MAX_VALUE);
+        	if(writers[id]!=null) {
+	        	if(writers[idPartner]!=null) writers[id].println(locations[idPartner] + SEPARATOR + timestamps[idPartner]);
+	        	else writers[id].println("Unkown" + SEPARATOR + Integer.MAX_VALUE);
+        	}
 		}
 
 		private void setFields(String line) {
