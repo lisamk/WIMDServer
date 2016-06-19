@@ -1,104 +1,90 @@
 package wimd;
 
-import java.net.*;
+import java.io.IOException;
+import java.net.ServerSocket;
+import java.net.Socket;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 
-class Server {
+public class Server {
 
-    private String mac1;
-    private String mac2;
+    private static final int PORT = 4031;
+    private static final String SEPARATOR = "#";
+    private static String[] locations = new String[2];
+    private static int[] timestamps = new int[2];
+    private static PrintWriter[] writers = new PrintWriter[2];
 
-    private int ts1;
-    private int ts2;
-
-    private String location1;
-    private String location2;
-
-    private int id;
-
-    private ServerSocket serverSocket = null;
-    protected static final String SEPARATOR = "#";
-    private boolean running = true; 
-
-    public Server() {
+    public static void main(String[] args) throws Exception {
+        System.out.println("The server is running.");
+        ServerSocket socket = new ServerSocket(PORT);
         try {
-            serverSocket = new ServerSocket(4031);
-            
-            System.out.println("Server started.");
-            
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-						Thread.sleep(7200000); // Server is 2h online
-						running = false;
-					} catch (InterruptedException e) {
-						System.out.println("Server is shutting down...");
-						return;
-					}
-					
-                }
-            }).start();
-
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        while(running) {
-                            Socket socket = serverSocket.accept();
-                            InputStreamReader isr = new InputStreamReader(socket.getInputStream());
-                            BufferedReader br = new BufferedReader(isr);
-
-                            setFields(br.readLine());
-
-                            PrintWriter pw = new PrintWriter(socket.getOutputStream(), true);
-                            if(id==0) pw.println(location2 + SEPARATOR + ts2);
-                            else if(id==1) pw.println(location1 + SEPARATOR + ts1);
-                            pw.close();
-                        }
-                        System.out.println("Server is shutting down...");
-                    }
-                    catch(IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }).start();
-        }
-        catch(IOException e) {
-            e.printStackTrace();
+            while(true) {
+                new Handler(socket.accept()).start();
+            }
+        } finally {
+        	socket.close();
         }
     }
 
-    private void setFields(String line) {
-    	System.out.println("Data received: " + line);
-    	
-        String[] fields = line.split(SEPARATOR);
+    private static class Handler extends Thread {
+        private int id;
+        private int idPartner;
+        private Socket socket;
+        private BufferedReader in;
+        private PrintWriter out;
 
-        id = 0;
-        if(mac1==null) mac1 = fields[0];
-        else if(!mac1.equals(fields[0])) {
-            id = 1;
-            if(mac2==null) mac2 = fields[0];
-            else if(!mac2.equals(fields[0])) {
-                System.err.print("Too many connections");
-                return;
+        public Handler(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            try {
+                in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                out = new PrintWriter(socket.getOutputStream(), true);
+                
+                id = 0;
+                idPartner = 1;
+                if(writers[0]==null) writers[0] = out;
+                else if(writers[1]==null) {
+                	id = 1;
+                	idPartner = 0;
+                	writers[1] = out;
+                }
+                else out.write("REFUSED"); //TODO 
+                
+                setFields(in.readLine());
+                writeFields();
+
+                while(true) {
+                	setFields(in.readLine());
+                	writeFields();
+                }
+            } catch (IOException e) {
+                System.out.println(e);
+            } finally {
+            	writers[id] = null;
+                locations[id] = null;
+                timestamps[id] = 0;
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                	e.printStackTrace();
+                }
             }
         }
+        
+        private void writeFields() {
+        	if(writers[idPartner]!=null) writers[id].println(locations[idPartner] + SEPARATOR + timestamps[idPartner]);
+        	else writers[id].println("Unkown" + SEPARATOR + Integer.MAX_VALUE);
+		}
 
-        if(id==0) {
-            ts1 = Integer.parseInt(fields[1]);
-            location1 = fields[1];
-        }
-        else {
-            ts2 = Integer.parseInt(fields[1]);
-            location2 = fields[1];
+		private void setFields(String line) {
+			System.out.println(line);
+			String[] fields = line.split(SEPARATOR);
+	        locations[id] = fields[0];
+	        timestamps[id] = Integer.parseInt(fields[1]);
         }
     }
-
-    public static void main(String[] args) {
-		new Server();
-	}
-    
-    
 }
