@@ -3,7 +3,7 @@ package wimd;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-
+import java.net.SocketException;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -16,16 +16,18 @@ public class Server {
     private static int[] timestamps = new int[2];
     private static PrintWriter[] writers = new PrintWriter[2];
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         System.out.println("The server is running.");
-        ServerSocket socket = new ServerSocket(PORT);
-        try {
-            while(true) {
-                new Handler(socket.accept()).start();
-            }
-        } finally {
-        	socket.close();
-        }
+		ServerSocket socket;
+		try {
+			socket = new ServerSocket(PORT);
+			while(true) {
+				new Handler(socket.accept()).start();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+        
     }
 
     private static class Handler extends Thread {
@@ -37,6 +39,11 @@ public class Server {
 
         public Handler(Socket socket) {
             this.socket = socket;
+            try {
+				socket.setSoTimeout(60000);
+			} catch (SocketException e) {
+				e.printStackTrace();
+			}
         }
 
         public void run() {
@@ -62,7 +69,7 @@ public class Server {
                 	writeFields();
                 }
             } catch (IOException e) {
-                System.out.println(e);
+                e.printStackTrace();
             } finally {
             	writers[id] = null;
                 locations[id] = null;
